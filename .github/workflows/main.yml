@@ -1,0 +1,158 @@
+name: "WINDOWS DOCKURR (AMBASSADOR + WARP 1.1.1.1)"
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-rdp:
+    name: "Windows UI Test Node"
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    env:
+      WINDOWS_USERNAME: "user"
+      WINDOWS_PASSWORD: "ngoc0102@"
+
+    steps:
+      - name: Prepare workspace and OEM scripts
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          sudo apt-get update > /dev/null 2>&1
+          sudo mkdir -p /mnt/windows_data
+          sudo chmod 777 /mnt/windows_data
+          mkdir -p oem
+
+          # === SCRIPT CÀI AUTO WARP ===
+          cat > oem/setup.ps1 <<'POWERSHELL'
+          $ErrorActionPreference = 'SilentlyContinue'
+          
+          $startupDir = "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp"
+          New-Item -ItemType Directory -Path $startupDir -Force | Out-Null
+          New-Item -ItemType Directory -Path "C:\Temp" -Force | Out-Null
+          
+          $startupCmd = @(
+            '@echo off'
+            'timeout /t 5 /nobreak >nul'
+            ':: KIEM TRA VA CAI DAT CLOUDFLARE WARP'
+            'if not exist "C:\Program Files\Cloudflare\Cloudflare WARP\warp-cli.exe" ('
+            '  powershell -WindowStyle Hidden -Command "Invoke-WebRequest -Uri ''https://1111-releases.cloudflareclient.com/windows/Cloudflare_WARP_Release-amd64.msi'' -OutFile ''C:\Temp\warp.msi'' -UseBasicParsing; Start-Process msiexec.exe -ArgumentList ''/i C:\Temp\warp.msi /qn'' -Wait; Start-Sleep 10; & ''C:\Program Files\Cloudflare\Cloudflare WARP\warp-cli.exe'' --accept-tos registration new; Start-Sleep 2; & ''C:\Program Files\Cloudflare\Cloudflare WARP\warp-cli.exe'' --accept-tos mode warp"'
+            ')'
+            ':: KET NOI WARP'
+            'powershell -WindowStyle Hidden -Command "& ''C:\Program Files\Cloudflare\Cloudflare WARP\warp-cli.exe'' --accept-tos connect"'
+            'timeout /t 5 /nobreak >nul'
+            ':: MO TRINH DUYET'
+            'start "" "msedge.exe" "https://tradingradarapp.com/?utm_source=ambas&utm_campaign=urgot&tid=tihon"'
+          ) -join [Environment]::NewLine
+          
+          Set-Content -Path (Join-Path $startupDir "start-warp.cmd") -Value $startupCmd -Encoding ASCII
+          POWERSHELL
+
+          cat > oem/install.bat <<'BAT'
+          @echo off
+          powershell -NoProfile -ExecutionPolicy Bypass -File "C:\oem\setup.ps1"
+          shutdown /r /t 10
+          BAT
+
+      - name: Generate docker-compose
+        shell: bash
+        run: |
+          cat > docker-compose.yml <<EOF
+          version: "3.9"
+          services:
+            windows:
+              image: dockurr/windows
+              container_name: windows_rdp
+              privileged: true
+              environment:
+                VERSION: "10"
+                USERNAME: "${WINDOWS_USERNAME}"
+                PASSWORD: "${WINDOWS_PASSWORD}"
+                RAM_SIZE: "8G"
+                CPU_CORES: "4"
+                DISK_SIZE: "64G"
+              devices:
+                - /dev/kvm
+              ports:
+                - "3389:3389"
+                - "8006:8006"
+              volumes:
+                - /mnt/windows_data:/storage
+                - ./oem:/oem
+          EOF
+
+      - name: Boot Windows
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          docker compose up -d > /dev/null 2>&1
+
+      - name: Start tunnels
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          wget -q https://github.com/kami2k1/tunnel/releases/latest/download/kami-tunnel-linux-amd64.tar.gz
+          tar -xzf kami-tunnel-linux-amd64.tar.gz > /dev/null 2>&1
+          chmod +x kami-tunnel
+          
+          mkdir -p tunnel_rdp tunnel_web
+          cp kami-tunnel tunnel_rdp/
+          cp kami-tunnel tunnel_web/
+          
+          cd tunnel_rdp
+          nohup ./kami-tunnel 3389 > rdp.log 2>&1 &
+          
+          cd ../tunnel_web
+          nohup ./kami-tunnel 8006 > web.log 2>&1 &
+
+      - name: Print connection info
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          RDP_IP=""
+          RDP_RETRY=0
+          while [ -z "$RDP_IP" ] && [ $RDP_RETRY -lt 60 ]; do
+            if [ -f tunnel_rdp/kami_tunnel.txt ]; then
+              RDP_CONTENT=$(head -1 tunnel_rdp/kami_tunnel.txt 2>/dev/null || true)
+              if [[ "${RDP_CONTENT:-}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+$ ]]; then
+                RDP_IP="$RDP_CONTENT"
+                break
+              fi
+            fi
+            sleep 2
+            RDP_RETRY=$((RDP_RETRY + 1))
+          done
+
+          WEB_IP=""
+          WEB_RETRY=0
+          while [ -z "$WEB_IP" ] && [ $WEB_RETRY -lt 60 ]; do
+            if [ -f tunnel_web/kami_tunnel.txt ]; then
+              WEB_CONTENT=$(head -1 tunnel_web/kami_tunnel.txt 2>/dev/null || true)
+              if [[ "${WEB_CONTENT:-}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+$ ]]; then
+                WEB_IP="$WEB_CONTENT"
+                break
+              fi
+            fi
+            sleep 2
+            WEB_RETRY=$((WEB_RETRY + 1))
+          done
+
+          echo "====================================================="
+          echo "🔥 BẢN ĐẠI SỨ - SẠCH SẼ & TỐC ĐỘ 🔥"
+          echo "🖥️ DÙNG CHO APP RDP  : ${RDP_IP}"
+          echo "🌐 DÙNG CHO WEB      : http://${WEB_IP}"
+          echo "👤 USERNAME         : ${WINDOWS_USERNAME}"
+          echo "🔑 PASSWORD         : ${WINDOWS_PASSWORD}"
+          echo "====================================================="
+
+      - name: Keep runner alive
+        shell: bash
+        run: |
+          for i in {1..72}; do
+            echo "May chu van song ($((i * 5)) phut / 360 phut)"
+            sleep 300
+          done
