@@ -1,4 +1,4 @@
-name: "WINDOWS DOCKURR (AMBASSADOR + WARP 1.1.1.1)"
+name: "WINDOWS DOCKURR (PURE + WARP 1.1.1.1)"
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   windows-rdp:
-    name: "Windows UI Test Node"
+    name: "Windows MMO Node"
     runs-on: ubuntu-latest
     timeout-minutes: 360
 
@@ -26,9 +26,12 @@ jobs:
           sudo chmod 777 /mnt/windows_data
           mkdir -p oem
 
-          # === SCRIPT CÀI AUTO WARP ===
+          # === SCRIPT AUTO SETUP & WARP 1.1.1.1 ===
           cat > oem/setup.ps1 <<'POWERSHELL'
           $ErrorActionPreference = 'SilentlyContinue'
+          
+          # Tắt màn hình khóa & set hinh nen cho do den xì
+          Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Personalization" -Name "NoLockScreen" -Value 1 -Type DWord -Force
           
           $startupDir = "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp"
           New-Item -ItemType Directory -Path $startupDir -Force | Out-Null
@@ -37,15 +40,16 @@ jobs:
           $startupCmd = @(
             '@echo off'
             'timeout /t 5 /nobreak >nul'
-            ':: KIEM TRA VA CAI DAT CLOUDFLARE WARP'
+            ':: TAI VA CAI DAT CLOUDFLARE WARP 1.1.1.1'
             'if not exist "C:\Program Files\Cloudflare\Cloudflare WARP\warp-cli.exe" ('
             '  powershell -WindowStyle Hidden -Command "Invoke-WebRequest -Uri ''https://1111-releases.cloudflareclient.com/windows/Cloudflare_WARP_Release-amd64.msi'' -OutFile ''C:\Temp\warp.msi'' -UseBasicParsing; Start-Process msiexec.exe -ArgumentList ''/i C:\Temp\warp.msi /qn'' -Wait; Start-Sleep 10; & ''C:\Program Files\Cloudflare\Cloudflare WARP\warp-cli.exe'' --accept-tos registration new; Start-Sleep 2; & ''C:\Program Files\Cloudflare\Cloudflare WARP\warp-cli.exe'' --accept-tos mode warp"'
             ')'
-            ':: KET NOI WARP'
+            ':: KET NOI WARP TANG HINH IP AZURE'
             'powershell -WindowStyle Hidden -Command "& ''C:\Program Files\Cloudflare\Cloudflare WARP\warp-cli.exe'' --accept-tos connect"'
-            'timeout /t 5 /nobreak >nul'
-            ':: MO TRINH DUYET'
-            'start "" "msedge.exe" "https://tradingradarapp.com/?utm_source=ambas&utm_campaign=urgot&tid=tihon"'
+            ':: Doi 10 giay cho mang thong suot'
+            'timeout /t 10 /nobreak >nul'
+            ':: (Tu chon) Mo san trinh duyet neu can'
+            ':: start "" "msedge.exe" "https://google.com"'
           ) -join [Environment]::NewLine
           
           Set-Content -Path (Join-Path $startupDir "start-warp.cmd") -Value $startupCmd -Encoding ASCII
@@ -142,7 +146,7 @@ jobs:
           done
 
           echo "====================================================="
-          echo "🔥 BẢN ĐẠI SỨ - SẠCH SẼ & TỐC ĐỘ 🔥"
+          echo "🔥 BẢN TỐI GIẢN - CÓ AUTO CLOUDFLARE WARP 🔥"
           echo "🖥️ DÙNG CHO APP RDP  : ${RDP_IP}"
           echo "🌐 DÙNG CHO WEB      : http://${WEB_IP}"
           echo "👤 USERNAME         : ${WINDOWS_USERNAME}"
