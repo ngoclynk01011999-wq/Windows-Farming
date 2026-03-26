@@ -1,4 +1,4 @@
-name: "WINDOWS DOCKURR (PURE + WARP 1.1.1.1)"
+name: "WINDOWS DOCKURR (WARP + MMO BANDWIDTH APPS)"
 
 on:
   workflow_dispatch:
@@ -26,38 +26,44 @@ jobs:
           sudo chmod 777 /mnt/windows_data
           mkdir -p oem
 
-          # === SCRIPT AUTO SETUP & WARP 1.1.1.1 ===
-          cat > oem/setup.ps1 <<'POWERSHELL'
+          # === SCRIPT CÀI WARP & 6 APP BĂNG THÔNG NGẦM ===
+          cat > oem/setup-apps.ps1 <<'POWERSHELL'
           $ErrorActionPreference = 'SilentlyContinue'
           
-          # Tắt màn hình khóa & set hinh nen cho do den xì
-          Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Personalization" -Name "NoLockScreen" -Value 1 -Type DWord -Force
-          
-          $startupDir = "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp"
-          New-Item -ItemType Directory -Path $startupDir -Force | Out-Null
-          New-Item -ItemType Directory -Path "C:\Temp" -Force | Out-Null
-          
-          $startupCmd = @(
-            '@echo off'
-            'timeout /t 5 /nobreak >nul'
-            ':: TAI VA CAI DAT CLOUDFLARE WARP 1.1.1.1'
-            'if not exist "C:\Program Files\Cloudflare\Cloudflare WARP\warp-cli.exe" ('
-            '  powershell -WindowStyle Hidden -Command "Invoke-WebRequest -Uri ''https://1111-releases.cloudflareclient.com/windows/Cloudflare_WARP_Release-amd64.msi'' -OutFile ''C:\Temp\warp.msi'' -UseBasicParsing; Start-Process msiexec.exe -ArgumentList ''/i C:\Temp\warp.msi /qn'' -Wait; Start-Sleep 10; & ''C:\Program Files\Cloudflare\Cloudflare WARP\warp-cli.exe'' --accept-tos registration new; Start-Sleep 2; & ''C:\Program Files\Cloudflare\Cloudflare WARP\warp-cli.exe'' --accept-tos mode warp"'
-            ')'
-            ':: KET NOI WARP TANG HINH IP AZURE'
-            'powershell -WindowStyle Hidden -Command "& ''C:\Program Files\Cloudflare\Cloudflare WARP\warp-cli.exe'' --accept-tos connect"'
-            ':: Doi 10 giay cho mang thong suot'
-            'timeout /t 10 /nobreak >nul'
-            ':: (Tu chon) Mo san trinh duyet neu can'
-            ':: start "" "msedge.exe" "https://google.com"'
-          ) -join [Environment]::NewLine
-          
-          Set-Content -Path (Join-Path $startupDir "start-warp.cmd") -Value $startupCmd -Encoding ASCII
+          # 1. CÀI ĐẶT VÀ BẬT WARP 1.1.1.1
+          Invoke-WebRequest -Uri "https://1111-releases.cloudflareclient.com/windows/Cloudflare_WARP_Release-amd64.msi" -OutFile "C:\warp.msi" -UseBasicParsing
+          Start-Process msiexec.exe -ArgumentList "/i C:\warp.msi /qn" -Wait
+          Start-Sleep 15
+          & "C:\Program Files\Cloudflare\Cloudflare WARP\warp-cli.exe" --accept-tos registration new
+          Start-Sleep 5
+          & "C:\Program Files\Cloudflare\Cloudflare WARP\warp-cli.exe" --accept-tos mode warp
+          Start-Sleep 2
+          & "C:\Program Files\Cloudflare\Cloudflare WARP\warp-cli.exe" --accept-tos connect
+
+          # 2. TẢI VÀ CÀI ĐẶT SILENT 6 KÈO SHARE BĂNG THÔNG
+          $apps = @(
+              @{ Name="Honeygain"; Url="https://download.honeygain.com/windows-app/Honeygain_install.exe"; Args="/S" },
+              @{ Name="Traffmonetizer"; Url="https://data.traffmonetizer.com/downloads/Installer.exe"; Args="/S" },
+              @{ Name="PawnsApp"; Url="https://download.pawns.app/windows/pawnsapp-windows.exe"; Args="/S" },
+              @{ Name="PacketStream"; Url="https://packetstream.io/psclient_windows_x64.exe"; Args="/S" },
+              @{ Name="EarnApp"; Url="https://brightdata.com/static/earnapp/Install_EarnApp.exe"; Args="/q" },
+              @{ Name="EarnFM"; Url="https://earn.fm/download/windows"; Args="/S" }
+          )
+
+          foreach ($app in $apps) {
+              $exePath = "C:\$($app.Name).exe"
+              Invoke-WebRequest -Uri $app.Url -OutFile $exePath -UseBasicParsing
+              if (Test-Path $exePath) {
+                  Start-Process $exePath -ArgumentList $app.Args -Wait
+              }
+          }
           POWERSHELL
 
           cat > oem/install.bat <<'BAT'
           @echo off
-          powershell -NoProfile -ExecutionPolicy Bypass -File "C:\oem\setup.ps1"
+          echo Dang cai dat WARP 1.1.1.1 va Dan 6 App Share Bang Thong...
+          powershell -NoProfile -ExecutionPolicy Bypass -File "C:\oem\setup-apps.ps1"
+          echo Setup hoan tat, chuan bi khoi dong lai!
           shutdown /r /t 10
           BAT
 
@@ -146,7 +152,7 @@ jobs:
           done
 
           echo "====================================================="
-          echo "🔥 BẢN TỐI GIẢN - CÓ AUTO CLOUDFLARE WARP 🔥"
+          echo "🔥 BẢN TỔNG LỰC - WARP + 6 KÈO BĂNG THÔNG 🔥"
           echo "🖥️ DÙNG CHO APP RDP  : ${RDP_IP}"
           echo "🌐 DÙNG CHO WEB      : http://${WEB_IP}"
           echo "👤 USERNAME         : ${WINDOWS_USERNAME}"
