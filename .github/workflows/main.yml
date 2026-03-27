@@ -1,4 +1,4 @@
-name: "WINDOWS MMO (PORTABLE TRAFFMONETIZER FULL)"
+name: "WINDOWS MMO (PORTABLE TRAFFMONETIZER + RDP)"
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   windows-rdp:
-    name: "Traffmonetizer Auto Node"
+    name: "Traffmonetizer Windows Node"
     runs-on: ubuntu-latest
     timeout-minutes: 360
 
@@ -26,52 +26,41 @@ jobs:
           sudo chmod 777 /mnt/windows_data
           mkdir -p oem
 
-          # === SCRIPT TỐI THƯỢNG CHO HÀNG PORTABLE ===
+          # === SCRIPT TẢI APP VÀ TẠO BOT GÕ PHÍM ===
           cat > oem/setup-system.ps1 <<'POWERSHELL'
           $ErrorActionPreference = 'SilentlyContinue'
-          $ProgressPreference = 'SilentlyContinue'
           
-          # 1. TẢI WARP VÀ TRAFFMONETIZER (Lưu thẳng vào ổ C để xài luôn)
-          Invoke-WebRequest -Uri "https://1111-releases.cloudflareclient.com/win/latest" -OutFile "C:\warp.msi" -UseBasicParsing
+          # Tải thẳng ổ C
           Invoke-WebRequest -Uri "https://data.traffmonetizer.com/downloads/Traffmonetizer.exe" -OutFile "C:\Traffmonetizer.exe" -UseBasicParsing
           
-          # 2. CÀI ĐẶT WARP VÀ ÉP CONNECT (Traffmonetizer đéo cài, để im đó)
-          Start-Process msiexec.exe -ArgumentList "/i C:\warp.msi /qn" -WindowStyle Hidden -Wait
-          Start-Sleep 5
-          & "C:\Program Files\Cloudflare\Cloudflare WARP\warp-cli.exe" --accept-tos registration new | Out-Null
-          Start-Sleep 2
-          & "C:\Program Files\Cloudflare\Cloudflare WARP\warp-cli.exe" --accept-tos mode warp | Out-Null
-          Start-Sleep 2
-          & "C:\Program Files\Cloudflare\Cloudflare WARP\warp-cli.exe" --accept-tos connect | Out-Null
-
-          # 3. TẠO BOT KHỞI ĐỘNG CỦA USER (Xây tổ + Gắn Token + Mở App)
+          # TẠO CON MA GÕ PHÍM BÁ ĐẠO (CÓ BẤM TAB CHUYỂN Ô)
           $ps1 = @(
-              'Start-Sleep -Seconds 5'
-              '# Tao san thu muc AppData truoc khi App kiem tra'
-              '$tmDir = "$env:APPDATA\traffmonetizer"'
-              'New-Item -ItemType Directory -Path $tmDir -Force | Out-Null'
-              '# Nhet Token vao config'
-              '$json = @{ Token = "6HN0okse0Lcd2aIrgEB2ZY6hIsEIhl1QepxAh78+PLA="; StartWithWindows = $true; Accepting = $true } | ConvertTo-Json -Compress'
-              '[System.IO.File]::WriteAllText("$tmDir\settings.json", $json)'
-              'Start-Sleep -Seconds 2'
-              '# Mo con hang Portable len, no se doc thay file JSON vua tao!'
-              'Start-Process "C:\Traffmonetizer.exe" -WindowStyle Hidden'
-              '# Tu huy bot'
+              'Add-Type -AssemblyName Microsoft.VisualBasic',
+              'Add-Type -AssemblyName System.Windows.Forms',
+              'Start-Sleep -Seconds 10 # Cho App bung ra han',
+              '$proc = Get-Process -Name "Traffmonetizer" -ErrorAction SilentlyContinue | Select-Object -First 1',
+              'if ($proc) {',
+              '    [Microsoft.VisualBasic.Interaction]::AppActivate($proc.Id)',
+              '    Start-Sleep -Seconds 2',
+              '    [System.Windows.Forms.SendKeys]::SendWait("{TAB}") # BAM TAB DE CHUYEN CON TRO VAO O NHAP TOKEN',
+              '    Start-Sleep -Milliseconds 500',
+              '    [System.Windows.Forms.SendKeys]::SendWait("6HN0okse0Lcd2aIrgEB2ZY6hIsEIhl1QepxAh78{+}PLA=")',
+              '    Start-Sleep -Milliseconds 500',
+              '    [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")',
+              '}',
               'Remove-Item -Path $MyInvocation.MyCommand.Path -Force'
           ) -join [Environment]::NewLine
-          Set-Content -Path "C:\run_traff.ps1" -Value $ps1 -Encoding UTF8
+          Set-Content -Path "C:\bot_gophim.ps1" -Value $ps1 -Encoding UTF8
 
-          # Đặt bẫy vào thư mục Startup
+          # ĐẶT BẪY KHỞI ĐỘNG
           $startupDir = "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp"
           $cmd = @(
               '@echo off'
-              'powershell -WindowStyle Hidden -ExecutionPolicy Bypass -File "C:\run_traff.ps1"'
+              'start "" "C:\Traffmonetizer.exe"'
+              'powershell -WindowStyle Hidden -ExecutionPolicy Bypass -File "C:\bot_gophim.ps1"'
               'del "%~f0"'
           ) -join [Environment]::NewLine
           Set-Content -Path "$startupDir\boot_app.cmd" -Value $cmd -Encoding ASCII
-
-          # Dọn rác
-          Remove-Item -Path "C:\warp.msi" -Force
           POWERSHELL
 
           cat > oem/install.bat <<'BAT'
@@ -110,72 +99,44 @@ jobs:
       - name: Boot Windows
         shell: bash
         run: |
-          set -Eeuo pipefail
           docker compose up -d > /dev/null 2>&1
 
       - name: Start tunnels
         shell: bash
         run: |
-          set -Eeuo pipefail
           wget -q https://github.com/kami2k1/tunnel/releases/latest/download/kami-tunnel-linux-amd64.tar.gz
           tar -xzf kami-tunnel-linux-amd64.tar.gz > /dev/null 2>&1
           chmod +x kami-tunnel
-          
           mkdir -p tunnel_rdp tunnel_web
           cp kami-tunnel tunnel_rdp/
           cp kami-tunnel tunnel_web/
-          
           cd tunnel_rdp
           nohup ./kami-tunnel 3389 > rdp.log 2>&1 &
-          
           cd ../tunnel_web
           nohup ./kami-tunnel 8006 > web.log 2>&1 &
 
       - name: Print connection info
         shell: bash
         run: |
-          set -Eeuo pipefail
-
           RDP_IP=""
-          RDP_RETRY=0
-          while [ -z "$RDP_IP" ] && [ $RDP_RETRY -lt 60 ]; do
-            if [ -f tunnel_rdp/kami_tunnel.txt ]; then
-              RDP_CONTENT=$(head -1 tunnel_rdp/kami_tunnel.txt 2>/dev/null || true)
-              if [[ "${RDP_CONTENT:-}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+$ ]]; then
-                RDP_IP="$RDP_CONTENT"
-                break
-              fi
-            fi
+          while [ -z "$RDP_IP" ]; do
+            RDP_CONTENT=$(head -1 tunnel_rdp/kami_tunnel.txt 2>/dev/null || true)
+            if [[ "${RDP_CONTENT:-}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+$ ]]; then RDP_IP="$RDP_CONTENT"; break; fi
             sleep 2
-            RDP_RETRY=$((RDP_RETRY + 1))
           done
-
           WEB_IP=""
-          WEB_RETRY=0
-          while [ -z "$WEB_IP" ] && [ $WEB_RETRY -lt 60 ]; do
-            if [ -f tunnel_web/kami_tunnel.txt ]; then
-              WEB_CONTENT=$(head -1 tunnel_web/kami_tunnel.txt 2>/dev/null || true)
-              if [[ "${WEB_CONTENT:-}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+$ ]]; then
-                WEB_IP="$WEB_CONTENT"
-                break
-              fi
-            fi
+          while [ -z "$WEB_IP" ]; do
+            WEB_CONTENT=$(head -1 tunnel_web/kami_tunnel.txt 2>/dev/null || true)
+            if [[ "${WEB_CONTENT:-}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+$ ]]; then WEB_IP="$WEB_CONTENT"; break; fi
             sleep 2
-            WEB_RETRY=$((WEB_RETRY + 1))
           done
-
           echo "====================================================="
-          echo "🔥 AUTO BOT: TRAFFMONETIZER PORTABLE XỊN SÒ 🔥"
+          echo "🔥 AUTO BOT: ĐÃ FIX LỖI CON TRỎ CHUỘT 🔥"
           echo "🖥️ DÙNG CHO APP RDP  : ${RDP_IP}"
           echo "🌐 DÙNG CHO WEB      : http://${WEB_IP}"
-          echo "👤 USERNAME         : ${WINDOWS_USERNAME}"
-          echo "🔑 PASSWORD         : ${WINDOWS_PASSWORD}"
           echo "====================================================="
 
       - name: Keep runner alive
         shell: bash
         run: |
-          for i in {1..72}; do
-            echo "May chu van song ($((i * 5)) phut / 360 phut) - AUTO BOT DANG CAY TIEN..."
-            sleep 300
-          done
+          for i in {1..72}; do echo "May chu van song... AUTO BOT DANG CAY TIEN..."; sleep 300; done
