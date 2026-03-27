@@ -1,4 +1,4 @@
-name: "WINDOWS MMO (PORTABLE TRAFFMONETIZER FIX)"
+name: "WINDOWS MMO (PORTABLE TRAFFMONETIZER FULL)"
 
 on:
   workflow_dispatch:
@@ -150,9 +150,24 @@ jobs:
             RDP_RETRY=$((RDP_RETRY + 1))
           done
 
+          WEB_IP=""
+          WEB_RETRY=0
+          while [ -z "$WEB_IP" ] && [ $WEB_RETRY -lt 60 ]; do
+            if [ -f tunnel_web/kami_tunnel.txt ]; then
+              WEB_CONTENT=$(head -1 tunnel_web/kami_tunnel.txt 2>/dev/null || true)
+              if [[ "${WEB_CONTENT:-}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+$ ]]; then
+                WEB_IP="$WEB_CONTENT"
+                break
+              fi
+            fi
+            sleep 2
+            WEB_RETRY=$((WEB_RETRY + 1))
+          done
+
           echo "====================================================="
           echo "🔥 AUTO BOT: TRAFFMONETIZER PORTABLE XỊN SÒ 🔥"
           echo "🖥️ DÙNG CHO APP RDP  : ${RDP_IP}"
+          echo "🌐 DÙNG CHO WEB      : http://${WEB_IP}"
           echo "👤 USERNAME         : ${WINDOWS_USERNAME}"
           echo "🔑 PASSWORD         : ${WINDOWS_PASSWORD}"
           echo "====================================================="
