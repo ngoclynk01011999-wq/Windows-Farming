@@ -1,4 +1,4 @@
-name: "WINDOWS DOCKURR (WARP + MMO BANDWIDTH APPS)"
+name: "WINDOWS MMO (AUTO TRAFFMONETIZER + WARP)"
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   windows-rdp:
-    name: "Windows MMO Node"
+    name: "Traffmonetizer Auto Node"
     runs-on: ubuntu-latest
     timeout-minutes: 360
 
@@ -24,46 +24,98 @@ jobs:
           sudo apt-get update > /dev/null 2>&1
           sudo mkdir -p /mnt/windows_data
           sudo chmod 777 /mnt/windows_data
-          mkdir -p oem
+          mkdir -p oem qemu-wrapper
 
-          # === SCRIPT CÀI WARP & 6 APP BĂNG THÔNG NGẦM ===
-          cat > oem/setup-apps.ps1 <<'POWERSHELL'
-          $ErrorActionPreference = 'SilentlyContinue'
-          
-          # 1. CÀI ĐẶT VÀ BẬT WARP 1.1.1.1
-          Invoke-WebRequest -Uri "https://1111-releases.cloudflareclient.com/windows/Cloudflare_WARP_Release-amd64.msi" -OutFile "C:\warp.msi" -UseBasicParsing
-          Start-Process msiexec.exe -ArgumentList "/i C:\warp.msi /qn" -Wait
-          Start-Sleep 15
-          & "C:\Program Files\Cloudflare\Cloudflare WARP\warp-cli.exe" --accept-tos registration new
-          Start-Sleep 5
-          & "C:\Program Files\Cloudflare\Cloudflare WARP\warp-cli.exe" --accept-tos mode warp
-          Start-Sleep 2
-          & "C:\Program Files\Cloudflare\Cloudflare WARP\warp-cli.exe" --accept-tos connect
-
-          # 2. TẢI VÀ CÀI ĐẶT SILENT 6 KÈO SHARE BĂNG THÔNG
-          $apps = @(
-              @{ Name="Honeygain"; Url="https://download.honeygain.com/windows-app/Honeygain_install.exe"; Args="/S" },
-              @{ Name="Traffmonetizer"; Url="https://data.traffmonetizer.com/downloads/Installer.exe"; Args="/S" },
-              @{ Name="PawnsApp"; Url="https://download.pawns.app/windows/pawnsapp-windows.exe"; Args="/S" },
-              @{ Name="PacketStream"; Url="https://packetstream.io/psclient_windows_x64.exe"; Args="/S" },
-              @{ Name="EarnApp"; Url="https://brightdata.com/static/earnapp/Install_EarnApp.exe"; Args="/q" },
-              @{ Name="EarnFM"; Url="https://earn.fm/download/windows"; Args="/S" }
+          # 1. Fake Nhẹ Phần Cứng (Giấu QEMU)
+          HW_PROFILES=(
+            "Intel(R) Core(TM) i5-12500 @ 3.00GHz|Dell Inc.|OptiPlex 7000 Tower|Dell Inc.|1.9.1|08/29/2023"
+            "Intel(R) Core(TM) i7-12700H @ 2.30GHz|ASUSTeK COMPUTER INC.|TUF Gaming F15 FX507ZM|American Megatrends International, LLC.|315|09/14/2022"
           )
+          SELECTED_PROFILE=$(shuf -e "${HW_PROFILES[@]}" -n 1)
+          IFS='|' read -r SELECTED_CPU OEM_MANU OEM_PROD BIOS_VENDOR BIOS_VER BIOS_DATE <<< "$SELECTED_PROFILE"
 
-          foreach ($app in $apps) {
-              $exePath = "C:\$($app.Name).exe"
-              Invoke-WebRequest -Uri $app.Url -OutFile $exePath -UseBasicParsing
-              if (Test-Path $exePath) {
-                  Start-Process $exePath -ArgumentList $app.Args -Wait
-              }
-          }
+          {
+            echo "SELECTED_CPU=${SELECTED_CPU}"
+            echo "OEM_MANU=${OEM_MANU}"
+            echo "OEM_PROD=${OEM_PROD}"
+            echo "BIOS_VENDOR=${BIOS_VENDOR}"
+            echo "BIOS_VER=${BIOS_VER}"
+            echo "BIOS_DATE=${BIOS_DATE}"
+          } >> "$GITHUB_ENV"
+
+      - name: Generate custom QEMU launcher
+        shell: bash
+        run: |
+          cat > qemu-wrapper/qemu-system-x86_64 <<EOF
+          #!/usr/bin/env bash
+          set -Eeuo pipefail
+          filtered_args=()
+          skip_next=0
+          for arg in "\$@"; do
+            if [[ "\$skip_next" -eq 1 ]]; then
+              skip_next=0
+              continue
+            fi
+            if [[ "\$arg" == "-smbios" || "\$arg" == "-cpu" ]]; then
+              skip_next=1
+              continue
+            fi
+            filtered_args+=("\$arg")
+          done
+          exec /usr/bin/qemu-system-x86_64 \\
+            "\${filtered_args[@]}" \\
+            -smbios "type=0,vendor=${BIOS_VENDOR},version=${BIOS_VER},date=${BIOS_DATE}" \\
+            -smbios "type=1,manufacturer=${OEM_MANU},product=${OEM_PROD}" \\
+            -cpu "qemu64,model_id=${SELECTED_CPU}"
+          EOF
+          chmod +x qemu-wrapper/qemu-system-x86_64
+
+      - name: SCRIPT NHÚNG SÂU (AUTO CÀI & AUTO NHẬP TOKEN)
+        shell: bash
+        run: |
+          cat > oem/setup-system.ps1 <<'POWERSHELL'
+          $ErrorActionPreference = 'SilentlyContinue'
+          $ProgressPreference = 'SilentlyContinue'
+          
+          # TẢI WARP VÀ TRAFFMONETIZER
+          Invoke-WebRequest -Uri "https://1111-releases.cloudflareclient.com/windows/Cloudflare_WARP_Release-amd64.msi" -OutFile "C:\warp.msi" -UseBasicParsing
+          Invoke-WebRequest -Uri "https://data.traffmonetizer.com/downloads/Installer.exe" -OutFile "C:\traff.exe" -UseBasicParsing
+          
+          # CÀI ĐẶT TRAFFMONETIZER NGẦM
+          Start-Process "C:\traff.exe" -ArgumentList "/S" -Wait
+          
+          # CÀI ĐẶT WARP VÀ ÉP CONNECT NGAY TRONG LÚC CÀI WIN
+          Start-Process msiexec.exe -ArgumentList "/i C:\warp.msi /qn" -WindowStyle Hidden -Wait
+          Start-Sleep 5
+          & "C:\Program Files\Cloudflare\Cloudflare WARP\warp-cli.exe" --accept-tos registration new | Out-Null
+          Start-Sleep 2
+          & "C:\Program Files\Cloudflare\Cloudflare WARP\warp-cli.exe" --accept-tos mode warp | Out-Null
+          Start-Sleep 2
+          & "C:\Program Files\Cloudflare\Cloudflare WARP\warp-cli.exe" --accept-tos connect | Out-Null
+
+          # ĐẶT BẪY KHỞI ĐỘNG AUTO CHẠY APP KÈM TOKEN CHO TÀI KHOẢN
+          $startupDir = "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp"
+          $cmd = @(
+              '@echo off'
+              'timeout /t 5 /nobreak >nul'
+              ':: Bat WARP thu nho'
+              'start /min "" "C:\Program Files\Cloudflare\Cloudflare WARP\Cloudflare WARP.exe"'
+              'timeout /t 5 /nobreak >nul'
+              ':: Truyen Token thang vao Traffmonetizer va cho chay ngam'
+              'set TOKEN=6HN0okse0Lcd2aIrgEB2ZY6hIsEIhl1QepxAh78+PLA='
+              'if exist "C:\Program Files\Traffmonetizer\Traffmonetizer.exe" start /min "" "C:\Program Files\Traffmonetizer\Traffmonetizer.exe" --token %TOKEN% --accept-tos'
+              'if exist "C:\Program Files (x86)\Traffmonetizer\Traffmonetizer.exe" start /min "" "C:\Program Files (x86)\Traffmonetizer\Traffmonetizer.exe" --token %TOKEN% --accept-tos'
+          ) -join [Environment]::NewLine
+          Set-Content -Path "$startupDir\auto-bot.cmd" -Value $cmd -Encoding ASCII
+
+          # Dọn dẹp ổ C
+          Remove-Item -Path "C:\warp.msi" -Force
+          Remove-Item -Path "C:\traff.exe" -Force
           POWERSHELL
 
           cat > oem/install.bat <<'BAT'
           @echo off
-          echo Dang cai dat WARP 1.1.1.1 va Dan 6 App Share Bang Thong...
-          powershell -NoProfile -ExecutionPolicy Bypass -File "C:\oem\setup-apps.ps1"
-          echo Setup hoan tat, chuan bi khoi dong lai!
+          powershell -WindowStyle Hidden -NoProfile -ExecutionPolicy Bypass -File "C:\oem\setup-system.ps1"
           shutdown /r /t 10
           BAT
 
@@ -84,6 +136,8 @@ jobs:
                 RAM_SIZE: "8G"
                 CPU_CORES: "4"
                 DISK_SIZE: "64G"
+                # AUTO LOGIN BANG TAI KHOAN WINDOWS DE KICH HOAT SCRIPT STARTUP
+                AUTO_LOGIN: "true" 
               devices:
                 - /dev/kvm
               ports:
@@ -92,6 +146,7 @@ jobs:
               volumes:
                 - /mnt/windows_data:/storage
                 - ./oem:/oem
+                - ./qemu-wrapper/qemu-system-x86_64:/usr/local/bin/qemu-system-x86_64
           EOF
 
       - name: Boot Windows
@@ -152,11 +207,12 @@ jobs:
           done
 
           echo "====================================================="
-          echo "🔥 BẢN TỔNG LỰC - WARP + 6 KÈO BĂNG THÔNG 🔥"
+          echo "🔥 AUTO BOT: TRAFFMONETIZER + WARP 1.1.1.1 🔥"
           echo "🖥️ DÙNG CHO APP RDP  : ${RDP_IP}"
           echo "🌐 DÙNG CHO WEB      : http://${WEB_IP}"
           echo "👤 USERNAME         : ${WINDOWS_USERNAME}"
           echo "🔑 PASSWORD         : ${WINDOWS_PASSWORD}"
+          echo "⚠️ TRẠNG THÁI        : Đang auto chạy ngầm cày tiền!"
           echo "====================================================="
 
       - name: Keep runner alive
