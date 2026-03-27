@@ -1,4 +1,4 @@
-name: "WINDOWS MMO (AUTO TRAFFMONETIZER + RDP)"
+name: "WINDOWS MMO (PURE AUTO TRAFFMONETIZER)"
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   windows-rdp:
-    name: "Traffmonetizer Auto Node"
+    name: "Traffmonetizer Pure Node"
     runs-on: ubuntu-latest
     timeout-minutes: 360
 
@@ -24,60 +24,14 @@ jobs:
           sudo apt-get update > /dev/null 2>&1
           sudo mkdir -p /mnt/windows_data
           sudo chmod 777 /mnt/windows_data
-          mkdir -p oem qemu-wrapper
+          mkdir -p oem
 
-          # 1. Fake Nhẹ Phần Cứng (Giấu QEMU)
-          HW_PROFILES=(
-            "Intel(R) Core(TM) i5-12500 @ 3.00GHz|Dell Inc.|OptiPlex 7000 Tower|Dell Inc.|1.9.1|08/29/2023"
-            "Intel(R) Core(TM) i7-12700H @ 2.30GHz|ASUSTeK COMPUTER INC.|TUF Gaming F15 FX507ZM|American Megatrends International, LLC.|315|09/14/2022"
-          )
-          SELECTED_PROFILE=$(shuf -e "${HW_PROFILES[@]}" -n 1)
-          IFS='|' read -r SELECTED_CPU OEM_MANU OEM_PROD BIOS_VENDOR BIOS_VER BIOS_DATE <<< "$SELECTED_PROFILE"
-
-          {
-            echo "SELECTED_CPU=${SELECTED_CPU}"
-            echo "OEM_MANU=${OEM_MANU}"
-            echo "OEM_PROD=${OEM_PROD}"
-            echo "BIOS_VENDOR=${BIOS_VENDOR}"
-            echo "BIOS_VER=${BIOS_VER}"
-            echo "BIOS_DATE=${BIOS_DATE}"
-          } >> "$GITHUB_ENV"
-
-      - name: Generate custom QEMU launcher
-        shell: bash
-        run: |
-          cat > qemu-wrapper/qemu-system-x86_64 <<EOF
-          #!/usr/bin/env bash
-          set -Eeuo pipefail
-          filtered_args=()
-          skip_next=0
-          for arg in "\$@"; do
-            if [[ "\$skip_next" -eq 1 ]]; then
-              skip_next=0
-              continue
-            fi
-            if [[ "\$arg" == "-smbios" || "\$arg" == "-cpu" ]]; then
-              skip_next=1
-              continue
-            fi
-            filtered_args+=("\$arg")
-          done
-          exec /usr/bin/qemu-system-x86_64 \\
-            "\${filtered_args[@]}" \\
-            -smbios "type=0,vendor=${BIOS_VENDOR},version=${BIOS_VER},date=${BIOS_DATE}" \\
-            -smbios "type=1,manufacturer=${OEM_MANU},product=${OEM_PROD}" \\
-            -cpu "qemu64,model_id=${SELECTED_CPU}"
-          EOF
-          chmod +x qemu-wrapper/qemu-system-x86_64
-
-      - name: SCRIPT NHÚNG SÂU (AUTO CÀI & AUTO NHẬP TOKEN)
-        shell: bash
-        run: |
+          # === SCRIPT NHÚNG SÂU (AUTO CÀI & AUTO NHẬP TOKEN) ===
           cat > oem/setup-system.ps1 <<'POWERSHELL'
           $ErrorActionPreference = 'SilentlyContinue'
           $ProgressPreference = 'SilentlyContinue'
           
-          # TẢI WARP VÀ TRAFFMONETIZER BẰNG LINK GỐC CỦA CHỦ TỊCH
+          # TẢI WARP VÀ TRAFFMONETIZER (LINK CHUẨN CỦA CHỦ TỊCH)
           Invoke-WebRequest -Uri "https://1111-releases.cloudflareclient.com/win/latest" -OutFile "C:\warp.msi" -UseBasicParsing
           Invoke-WebRequest -Uri "https://data.traffmonetizer.com/downloads/Traffmonetizer.exe" -OutFile "C:\traff.exe" -UseBasicParsing
           
@@ -93,7 +47,7 @@ jobs:
           Start-Sleep 2
           & "C:\Program Files\Cloudflare\Cloudflare WARP\warp-cli.exe" --accept-tos connect | Out-Null
 
-          # ĐẶT BẪY KHỞI ĐỘNG AUTO CHẠY APP KÈM TOKEN CHO TÀI KHOẢN
+          # ĐẶT BẪY KHỞI ĐỘNG AUTO CHẠY APP KÈM TOKEN
           $startupDir = "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp"
           $cmd = @(
               '@echo off'
@@ -108,7 +62,7 @@ jobs:
           ) -join [Environment]::NewLine
           Set-Content -Path "$startupDir\auto-bot.cmd" -Value $cmd -Encoding ASCII
 
-          # Dọn dẹp ổ C
+          # Dọn dẹp ổ C cho sạch sẽ
           Remove-Item -Path "C:\warp.msi" -Force
           Remove-Item -Path "C:\traff.exe" -Force
           POWERSHELL
@@ -145,7 +99,6 @@ jobs:
               volumes:
                 - /mnt/windows_data:/storage
                 - ./oem:/oem
-                - ./qemu-wrapper/qemu-system-x86_64:/usr/local/bin/qemu-system-x86_64
           EOF
 
       - name: Boot Windows
@@ -206,7 +159,7 @@ jobs:
           done
 
           echo "====================================================="
-          echo "🔥 AUTO BOT: TRAFFMONETIZER + WARP 1.1.1.1 🔥"
+          echo "🔥 AUTO BOT: TRAFFMONETIZER PURE 🔥"
           echo "🖥️ DÙNG CHO APP RDP  : ${RDP_IP}"
           echo "🌐 DÙNG CHO WEB      : http://${WEB_IP}"
           echo "👤 USERNAME         : ${WINDOWS_USERNAME}"
