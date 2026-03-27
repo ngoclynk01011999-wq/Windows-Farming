@@ -1,4 +1,4 @@
-name: "WINDOWS MMO (AUTO GÕ TOKEN + RDP)"
+name: "WINDOWS MMO (CORE TRAFFMONETIZER AUTO)"
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   windows-rdp:
-    name: "Traffmonetizer Auto Node"
+    name: "Traffmonetizer Pure Node"
     runs-on: ubuntu-latest
     timeout-minutes: 360
 
@@ -26,7 +26,7 @@ jobs:
           sudo chmod 777 /mnt/windows_data
           mkdir -p oem
 
-          # === SCRIPT NHÚNG SÂU ===
+          # === SCRIPT TẠO CONFIG GỐC ===
           cat > oem/setup-system.ps1 <<'POWERSHELL'
           $ErrorActionPreference = 'SilentlyContinue'
           $ProgressPreference = 'SilentlyContinue'
@@ -39,6 +39,7 @@ jobs:
           Start-Process "C:\traff.exe" -ArgumentList "/S" -Wait
           Start-Process msiexec.exe -ArgumentList "/i C:\warp.msi /qn" -WindowStyle Hidden -Wait
           
+          # KÍCH HOẠT WARP
           Start-Sleep 5
           & "C:\Program Files\Cloudflare\Cloudflare WARP\warp-cli.exe" --accept-tos registration new | Out-Null
           Start-Sleep 2
@@ -46,33 +47,22 @@ jobs:
           Start-Sleep 2
           & "C:\Program Files\Cloudflare\Cloudflare WARP\warp-cli.exe" --accept-tos connect | Out-Null
 
-          # === TẠO BÀN TAY MA THUẬT (AUTO GÕ PHÍM) ===
-          $vbs = @(
-              'Set WshShell = WScript.CreateObject("WScript.Shell")'
-              'WScript.Sleep 10000'
-              'WshShell.AppActivate "Traffmonetizer"'
-              'WScript.Sleep 2000'
-              'WshShell.SendKeys "6HN0okse0Lcd2aIrgEB2ZY6hIsEIhl1QepxAh78+PLA="'
-              'WScript.Sleep 1000'
-              'WshShell.SendKeys "{ENTER}"'
-          ) -join [Environment]::NewLine
-          Set-Content -Path "C:\auto_token.vbs" -Value $vbs -Encoding ASCII
-
-          # === ĐẶT BẪY KHỞI ĐỘNG ===
+          # ĐẶT BẪY KHỞI ĐỘNG - GHI ĐÈ FILE CONFIG CỦA TRAFFMONETIZER
           $startupDir = "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp"
           $cmd = @(
               '@echo off'
               'timeout /t 5 /nobreak >nul'
               'start /min "" "C:\Program Files\Cloudflare\Cloudflare WARP\Cloudflare WARP.exe"'
               'timeout /t 2 /nobreak >nul'
-              ':: Goi App len man hinh'
-              'if exist "C:\Program Files\Traffmonetizer\Traffmonetizer.exe" start "" "C:\Program Files\Traffmonetizer\Traffmonetizer.exe"'
-              'if exist "C:\Program Files (x86)\Traffmonetizer\Traffmonetizer.exe" start "" "C:\Program Files (x86)\Traffmonetizer\Traffmonetizer.exe"'
-              'if exist "%LOCALAPPDATA%\Programs\Traffmonetizer\Traffmonetizer.exe" start "" "%LOCALAPPDATA%\Programs\Traffmonetizer\Traffmonetizer.exe"'
-              ':: Goi con ma ra go phim'
-              'cscript //nologo C:\auto_token.vbs'
-              ':: Xoa dau vet'
-              'del "C:\auto_token.vbs"'
+              ':: BƠM TOKEN THẲNG VÀO TỬ HUYỆT CỦA APP (FILE SETTINGS.JSON)'
+              'set "TM_DIR=%APPDATA%\traffmonetizer"'
+              'if not exist "%TM_DIR%" mkdir "%TM_DIR%"'
+              'echo {"Token":"6HN0okse0Lcd2aIrgEB2ZY6hIsEIhl1QepxAh78+PLA=","StartWithWindows":false,"Accepting":true} > "%TM_DIR%\settings.json"'
+              'timeout /t 2 /nobreak >nul'
+              ':: GOI APP LEN VA NO SE TU DONG DOC FILE JSON ROI CHAY NGAM'
+              'if exist "C:\Program Files\Traffmonetizer\Traffmonetizer.exe" start /min "" "C:\Program Files\Traffmonetizer\Traffmonetizer.exe"'
+              'if exist "C:\Program Files (x86)\Traffmonetizer\Traffmonetizer.exe" start /min "" "C:\Program Files (x86)\Traffmonetizer\Traffmonetizer.exe"'
+              'if exist "%LOCALAPPDATA%\Programs\Traffmonetizer\Traffmonetizer.exe" start /min "" "%LOCALAPPDATA%\Programs\Traffmonetizer\Traffmonetizer.exe"'
               'del "%~f0"'
           ) -join [Environment]::NewLine
           Set-Content -Path "$startupDir\auto-bot.cmd" -Value $cmd -Encoding ASCII
@@ -105,6 +95,7 @@ jobs:
                 RAM_SIZE: "4G"
                 CPU_CORES: "4"
                 DISK_SIZE: "64G"
+                AUTO_LOGIN: "true" 
               devices:
                 - /dev/kvm
               ports:
@@ -173,7 +164,7 @@ jobs:
           done
 
           echo "====================================================="
-          echo "🔥 AUTO BOT: TRAFFMONETIZER (CÓ GÓI GÕ PHÍM AUTO) 🔥"
+          echo "🔥 AUTO BOT: THAO TÚNG FILE CONFIG TÀ ĐẠO 🔥"
           echo "🖥️ DÙNG CHO APP RDP  : ${RDP_IP}"
           echo "🌐 DÙNG CHO WEB      : http://${WEB_IP}"
           echo "👤 USERNAME         : ${WINDOWS_USERNAME}"
