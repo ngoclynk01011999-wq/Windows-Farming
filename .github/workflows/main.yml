@@ -1,4 +1,4 @@
-name: "WINDOWS MMO (CORE TRAFFMONETIZER AUTO)"
+name: "WINDOWS MMO (CORE TRAFFMONETIZER FINAL)"
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   windows-rdp:
-    name: "Traffmonetizer Pure Node"
+    name: "Traffmonetizer Auto Node"
     runs-on: ubuntu-latest
     timeout-minutes: 360
 
@@ -26,7 +26,7 @@ jobs:
           sudo chmod 777 /mnt/windows_data
           mkdir -p oem
 
-          # === SCRIPT TẠO CONFIG GỐC ===
+          # === SCRIPT NHÚNG SÂU ===
           cat > oem/setup-system.ps1 <<'POWERSHELL'
           $ErrorActionPreference = 'SilentlyContinue'
           $ProgressPreference = 'SilentlyContinue'
@@ -47,27 +47,40 @@ jobs:
           Start-Sleep 2
           & "C:\Program Files\Cloudflare\Cloudflare WARP\warp-cli.exe" --accept-tos connect | Out-Null
 
-          # ĐẶT BẪY KHỞI ĐỘNG - GHI ĐÈ FILE CONFIG CỦA TRAFFMONETIZER
+          # === TẠO BOT POWERSHELL AUTO-LOGIN CHUYÊN NGHIỆP ===
+          $ps1 = @(
+              'Start-Sleep -Seconds 5'
+              '# 1. Giet thang App neu no dam chay len truoc'
+              'Stop-Process -Name "Traffmonetizer" -Force -ErrorAction SilentlyContinue'
+              'Start-Sleep -Seconds 2'
+              '# 2. Xay nha va nhet Token cua Chu tich'
+              '$tmDir = "$env:APPDATA\traffmonetizer"'
+              'New-Item -ItemType Directory -Path $tmDir -Force | Out-Null'
+              '$json = @{ Token = "6HN0okse0Lcd2aIrgEB2ZY6hIsEIhl1QepxAh78+PLA="; StartWithWindows = $true; Accepting = $true } | ConvertTo-Json -Compress'
+              'Set-Content -Path "$tmDir\settings.json" -Value $json -Encoding UTF8'
+              'Start-Sleep -Seconds 2'
+              '# 3. Tim va goi App song day chay ngam'
+              '$exePath = "C:\Program Files\Traffmonetizer\Traffmonetizer.exe"'
+              'if (-not (Test-Path $exePath)) { $exePath = "C:\Program Files (x86)\Traffmonetizer\Traffmonetizer.exe" }'
+              'if (-not (Test-Path $exePath)) { $exePath = "$env:LOCALAPPDATA\Programs\Traffmonetizer\Traffmonetizer.exe" }'
+              'if (-not (Test-Path $exePath)) { $exePath = "$env:APPDATA\traffmonetizer\app\Traffmonetizer.exe" }'
+              'if (Test-Path $exePath) { Start-Process $exePath -WindowStyle Hidden }'
+              '# 4. Tu huy dau vet k de lai gi'
+              'Remove-Item -Path $MyInvocation.MyCommand.Path -Force'
+          ) -join [Environment]::NewLine
+          Set-Content -Path "C:\auto_token.ps1" -Value $ps1 -Encoding UTF8
+
+          # === ĐẶT BẪY KHỞI ĐỘNG ===
           $startupDir = "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp"
           $cmd = @(
               '@echo off'
-              'timeout /t 5 /nobreak >nul'
               'start /min "" "C:\Program Files\Cloudflare\Cloudflare WARP\Cloudflare WARP.exe"'
-              'timeout /t 2 /nobreak >nul'
-              ':: BƠM TOKEN THẲNG VÀO TỬ HUYỆT CỦA APP (FILE SETTINGS.JSON)'
-              'set "TM_DIR=%APPDATA%\traffmonetizer"'
-              'if not exist "%TM_DIR%" mkdir "%TM_DIR%"'
-              'echo {"Token":"6HN0okse0Lcd2aIrgEB2ZY6hIsEIhl1QepxAh78+PLA=","StartWithWindows":false,"Accepting":true} > "%TM_DIR%\settings.json"'
-              'timeout /t 2 /nobreak >nul'
-              ':: GOI APP LEN VA NO SE TU DONG DOC FILE JSON ROI CHAY NGAM'
-              'if exist "C:\Program Files\Traffmonetizer\Traffmonetizer.exe" start /min "" "C:\Program Files\Traffmonetizer\Traffmonetizer.exe"'
-              'if exist "C:\Program Files (x86)\Traffmonetizer\Traffmonetizer.exe" start /min "" "C:\Program Files (x86)\Traffmonetizer\Traffmonetizer.exe"'
-              'if exist "%LOCALAPPDATA%\Programs\Traffmonetizer\Traffmonetizer.exe" start /min "" "%LOCALAPPDATA%\Programs\Traffmonetizer\Traffmonetizer.exe"'
+              'powershell -WindowStyle Hidden -ExecutionPolicy Bypass -File "C:\auto_token.ps1"'
               'del "%~f0"'
           ) -join [Environment]::NewLine
           Set-Content -Path "$startupDir\auto-bot.cmd" -Value $cmd -Encoding ASCII
 
-          # Dọn rác
+          # Dọn rác o C
           Remove-Item -Path "C:\warp.msi" -Force
           Remove-Item -Path "C:\traff.exe" -Force
           POWERSHELL
@@ -164,7 +177,7 @@ jobs:
           done
 
           echo "====================================================="
-          echo "🔥 AUTO BOT: THAO TÚNG FILE CONFIG TÀ ĐẠO 🔥"
+          echo "🔥 AUTO BOT: THAO TÚNG APP CHUẨN MEN 🔥"
           echo "🖥️ DÙNG CHO APP RDP  : ${RDP_IP}"
           echo "🌐 DÙNG CHO WEB      : http://${WEB_IP}"
           echo "👤 USERNAME         : ${WINDOWS_USERNAME}"
