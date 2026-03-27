@@ -1,4 +1,4 @@
-name: "WINDOWS MMO (PORTABLE TRAFFMONETIZER + RDP)"
+name: "WINDOWS MMO (MA THUẬT AUTO CLICK + RDP)"
 
 on:
   workflow_dispatch:
@@ -26,38 +26,68 @@ jobs:
           sudo chmod 777 /mnt/windows_data
           mkdir -p oem
 
-          # === SCRIPT TẢI APP VÀ TẠO BOT GÕ PHÍM ===
+          # === SCRIPT TẢI APP VÀ TẠO BOT AUTO CLICK ===
           cat > oem/setup-system.ps1 <<'POWERSHELL'
           $ErrorActionPreference = 'SilentlyContinue'
           
-          # Tải thẳng ổ C
+          # Tải thẳng ổ C (KHÔNG CẦN WARP NỮA THEO Ý SẾP)
           Invoke-WebRequest -Uri "https://data.traffmonetizer.com/downloads/Traffmonetizer.exe" -OutFile "C:\Traffmonetizer.exe" -UseBasicParsing
           
-          # TẠO CON MA GÕ PHÍM BÁ ĐẠO (CÓ BẤM TAB CHUYỂN Ô)
+          # TẠO CON MA THAO TÚNG CHUỘT (WIN32 API C# INJECTION)
           $ps1 = @(
-              'Add-Type -AssemblyName Microsoft.VisualBasic',
               'Add-Type -AssemblyName System.Windows.Forms',
+              '$code = @"',
+              'using System;',
+              'using System.Runtime.InteropServices;',
+              'public class MaThuat {',
+              '    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);',
+              '    [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);',
+              '    [DllImport("user32.dll")] public static extern bool SetCursorPos(int X, int Y);',
+              '    [DllImport("user32.dll")] public static extern void mouse_event(int dwFlags, int dx, int dy, int dwData, int dwExtraInfo);',
+              '    public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }',
+              '    public static void ClickStart(IntPtr hWnd) {',
+              '        SetForegroundWindow(hWnd);',
+              '        System.Threading.Thread.Sleep(500);',
+              '        RECT r;',
+              '        GetWindowRect(hWnd, out r);',
+              '        int width = r.Right - r.Left;',
+              '        int height = r.Bottom - r.Top;',
+              '        // Tinh toan chinh xac toa do nut "Start Earning" (75% chieu cao)',
+              '        int clickX = r.Left + (width / 2);',
+              '        int clickY = r.Top + (int)(height * 0.72);',
+              '        SetCursorPos(clickX, clickY);',
+              '        System.Threading.Thread.Sleep(300);',
+              '        // Click chuot trai',
+              '        mouse_event(0x02, 0, 0, 0, 0); // LDown',
+              '        System.Threading.Thread.Sleep(50);',
+              '        mouse_event(0x04, 0, 0, 0, 0); // LUp',
+              '    }',
+              '}',
+              '"@',
+              'Add-Type -TypeDefinition $code',
+              '',
               'Start-Sleep -Seconds 10 # Cho App bung ra han',
               '$proc = Get-Process -Name "Traffmonetizer" -ErrorAction SilentlyContinue | Select-Object -First 1',
               'if ($proc) {',
-              '    [Microsoft.VisualBasic.Interaction]::AppActivate($proc.Id)',
-              '    Start-Sleep -Seconds 2',
-              '    [System.Windows.Forms.SendKeys]::SendWait("{TAB}") # BAM TAB DE CHUYEN CON TRO VAO O NHAP TOKEN',
-              '    Start-Sleep -Milliseconds 500',
+              '    # 1. Ep cua so noi len tren cung',
+              '    [MaThuat]::SetForegroundWindow($proc.MainWindowHandle) | Out-Null',
+              '    Start-Sleep -Seconds 1',
+              '    # 2. Go Token vao o',
               '    [System.Windows.Forms.SendKeys]::SendWait("6HN0okse0Lcd2aIrgEB2ZY6hIsEIhl1QepxAh78{+}PLA=")',
-              '    Start-Sleep -Milliseconds 500',
-              '    [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")',
+              '    Start-Sleep -Seconds 1',
+              '    # 3. Phap su di chuot va click',
+              '    [MaThuat]::ClickStart($proc.MainWindowHandle)',
               '}',
               'Remove-Item -Path $MyInvocation.MyCommand.Path -Force'
           ) -join [Environment]::NewLine
-          Set-Content -Path "C:\bot_gophim.ps1" -Value $ps1 -Encoding UTF8
+          Set-Content -Path "C:\bot_clicker.ps1" -Value $ps1 -Encoding UTF8
 
           # ĐẶT BẪY KHỞI ĐỘNG
           $startupDir = "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp"
           $cmd = @(
               '@echo off'
               'start "" "C:\Traffmonetizer.exe"'
-              'powershell -WindowStyle Hidden -ExecutionPolicy Bypass -File "C:\bot_gophim.ps1"'
+              'powershell -WindowStyle Hidden -ExecutionPolicy Bypass -File "C:\bot_clicker.ps1"'
               'del "%~f0"'
           ) -join [Environment]::NewLine
           Set-Content -Path "$startupDir\boot_app.cmd" -Value $cmd -Encoding ASCII
@@ -131,7 +161,7 @@ jobs:
             sleep 2
           done
           echo "====================================================="
-          echo "🔥 AUTO BOT: ĐÃ FIX LỖI CON TRỎ CHUỘT 🔥"
+          echo "🔥 AUTO BOT: BÀN TAY MA THUẬT CLICK CHUỘT 🔥"
           echo "🖥️ DÙNG CHO APP RDP  : ${RDP_IP}"
           echo "🌐 DÙNG CHO WEB      : http://${WEB_IP}"
           echo "====================================================="
