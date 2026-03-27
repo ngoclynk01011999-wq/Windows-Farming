@@ -1,4 +1,4 @@
-name: "WINDOWS MMO (AUTO TRAFFMONETIZER + WARP)"
+name: "WINDOWS MMO (AUTO TRAFFMONETIZER MAX SPEED)"
 
 on:
   workflow_dispatch:
@@ -77,9 +77,9 @@ jobs:
           $ErrorActionPreference = 'SilentlyContinue'
           $ProgressPreference = 'SilentlyContinue'
           
-          # TẢI WARP VÀ TRAFFMONETIZER
-          Invoke-WebRequest -Uri "https://1111-releases.cloudflareclient.com/windows/Cloudflare_WARP_Release-amd64.msi" -OutFile "C:\warp.msi" -UseBasicParsing
-          Invoke-WebRequest -Uri "https://data.traffmonetizer.com/downloads/Installer.exe" -OutFile "C:\traff.exe" -UseBasicParsing
+          # TẢI WARP VÀ TRAFFMONETIZER BẰNG LINK GỐC CỦA CHỦ TỊCH
+          Invoke-WebRequest -Uri "https://1111-releases.cloudflareclient.com/win/latest" -OutFile "C:\warp.msi" -UseBasicParsing
+          Invoke-WebRequest -Uri "https://data.traffmonetizer.com/downloads/Traffmonetizer.exe" -OutFile "C:\traff.exe" -UseBasicParsing
           
           # CÀI ĐẶT TRAFFMONETIZER NGẦM
           Start-Process "C:\traff.exe" -ArgumentList "/S" -Wait
@@ -133,10 +133,9 @@ jobs:
                 VERSION: "10"
                 USERNAME: "${WINDOWS_USERNAME}"
                 PASSWORD: "${WINDOWS_PASSWORD}"
-                RAM_SIZE: "8G"
+                RAM_SIZE: "4G"
                 CPU_CORES: "4"
                 DISK_SIZE: "64G"
-                # AUTO LOGIN BANG TAI KHOAN WINDOWS DE KICH HOAT SCRIPT STARTUP
                 AUTO_LOGIN: "true" 
               devices:
                 - /dev/kvm
@@ -155,70 +154,10 @@ jobs:
           set -Eeuo pipefail
           docker compose up -d > /dev/null 2>&1
 
-      - name: Start tunnels
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          wget -q https://github.com/kami2k1/tunnel/releases/latest/download/kami-tunnel-linux-amd64.tar.gz
-          tar -xzf kami-tunnel-linux-amd64.tar.gz > /dev/null 2>&1
-          chmod +x kami-tunnel
-          
-          mkdir -p tunnel_rdp tunnel_web
-          cp kami-tunnel tunnel_rdp/
-          cp kami-tunnel tunnel_web/
-          
-          cd tunnel_rdp
-          nohup ./kami-tunnel 3389 > rdp.log 2>&1 &
-          
-          cd ../tunnel_web
-          nohup ./kami-tunnel 8006 > web.log 2>&1 &
-
-      - name: Print connection info
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-
-          RDP_IP=""
-          RDP_RETRY=0
-          while [ -z "$RDP_IP" ] && [ $RDP_RETRY -lt 60 ]; do
-            if [ -f tunnel_rdp/kami_tunnel.txt ]; then
-              RDP_CONTENT=$(head -1 tunnel_rdp/kami_tunnel.txt 2>/dev/null || true)
-              if [[ "${RDP_CONTENT:-}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+$ ]]; then
-                RDP_IP="$RDP_CONTENT"
-                break
-              fi
-            fi
-            sleep 2
-            RDP_RETRY=$((RDP_RETRY + 1))
-          done
-
-          WEB_IP=""
-          WEB_RETRY=0
-          while [ -z "$WEB_IP" ] && [ $WEB_RETRY -lt 60 ]; do
-            if [ -f tunnel_web/kami_tunnel.txt ]; then
-              WEB_CONTENT=$(head -1 tunnel_web/kami_tunnel.txt 2>/dev/null || true)
-              if [[ "${WEB_CONTENT:-}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+$ ]]; then
-                WEB_IP="$WEB_CONTENT"
-                break
-              fi
-            fi
-            sleep 2
-            WEB_RETRY=$((WEB_RETRY + 1))
-          done
-
-          echo "====================================================="
-          echo "🔥 AUTO BOT: TRAFFMONETIZER + WARP 1.1.1.1 🔥"
-          echo "🖥️ DÙNG CHO APP RDP  : ${RDP_IP}"
-          echo "🌐 DÙNG CHO WEB      : http://${WEB_IP}"
-          echo "👤 USERNAME         : ${WINDOWS_USERNAME}"
-          echo "🔑 PASSWORD         : ${WINDOWS_PASSWORD}"
-          echo "⚠️ TRẠNG THÁI        : Đang auto chạy ngầm cày tiền!"
-          echo "====================================================="
-
       - name: Keep runner alive
         shell: bash
         run: |
           for i in {1..72}; do
-            echo "May chu van song ($((i * 5)) phut / 360 phut)"
+            echo "May chu van song ($((i * 5)) phut / 360 phut) - AUTO BOT DANG CAY TIEN..."
             sleep 300
           done
