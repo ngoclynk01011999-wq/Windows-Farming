@@ -1,4 +1,4 @@
-name: "WINDOWS MMO (THE FINAL BOSS - TRAFFMONETIZER)"
+name: "WINDOWS MMO (MA THUẬT NHÉT LÕI JSON + RDP)"
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   windows-rdp:
-    name: "Traffmonetizer Master Node"
+    name: "Traffmonetizer Windows Node"
     runs-on: ubuntu-latest
     timeout-minutes: 360
 
@@ -21,40 +21,43 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          sudo apt-get update
+          sudo apt-get update > /dev/null 2>&1
           sudo mkdir -p /mnt/windows_data
           sudo chmod 777 /mnt/windows_data
           mkdir -p oem
 
-          # === SCRIPT BƠM DNA CHUẨN XÁC VÀO ROAMING ===
+          # === SCRIPT TẢI APP VÀ BƠM THẲNG CẤU HÌNH VÀO LÕI ===
           cat > oem/setup-system.ps1 <<'POWERSHELL'
           $ErrorActionPreference = 'SilentlyContinue'
           
-          # Tải App siêu nhẹ đéo xài WARP
+          # Tải thẳng ổ C (KHÔNG CẦN WARP NỮA THEO Ý SẾP)
           Invoke-WebRequest -Uri "https://data.traffmonetizer.com/downloads/Traffmonetizer.exe" -OutFile "C:\Traffmonetizer.exe" -UseBasicParsing
           
-          # Tạo Bot mớm Token
+          # TẠO BOT TỰ ĐỘNG XÂY NHÀ VÀ BƠM TOKEN
           $ps1 = @(
               'Start-Sleep -Seconds 3',
+              '# 1. Tao thu muc Roaming chuan cho App',
               '$tmDir = "$env:APPDATA\traffmonetizer"',
               'if (-not (Test-Path $tmDir)) { New-Item -ItemType Directory -Path $tmDir -Force | Out-Null }',
-              '# Nhet Token ma hoa \u002B vao',
+              '# 2. Nhet Token ma hoa \u002B vao file settings.json',
               '$jsonStr = "{`"Token`":`"6HN0okse0Lcd2aIrgEB2ZY6hIsEIhl1QepxAh78\u002BPLA=`",`"StartWithWindows`":true,`"Accepting`":true}"',
               '[System.IO.File]::WriteAllText("$tmDir\settings.json", $jsonStr)',
               'Start-Sleep -Seconds 1',
+              '# 3. Goi hon App song day (Tu dong xanh le k can click)',
               'Start-Process "C:\Traffmonetizer.exe"',
+              '# Xoa dau vet k de lai gi',
               'Remove-Item -Path $MyInvocation.MyCommand.Path -Force'
           ) -join [Environment]::NewLine
           Set-Content -Path "C:\boot_traff.ps1" -Value $ps1 -Encoding UTF8
 
-          # Đặt bẫy tự kích hoạt
+          # ĐẶT BẪY KHỞI ĐỘNG
           $startupDir = "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp"
           $cmd = @(
-              '@echo off',
-              'powershell -WindowStyle Hidden -ExecutionPolicy Bypass -File "C:\boot_traff.ps1"',
+              '@echo off'
+              'powershell -WindowStyle Hidden -ExecutionPolicy Bypass -File "C:\boot_traff.ps1"'
               'del "%~f0"'
           ) -join [Environment]::NewLine
-          Set-Content -Path "$startupDir\boot_traff.cmd" -Value $cmd -Encoding ASCII
+          Set-Content -Path "$startupDir\boot_app.cmd" -Value $cmd -Encoding ASCII
           POWERSHELL
 
           cat > oem/install.bat <<'BAT'
@@ -88,24 +91,15 @@ jobs:
                 - ./oem:/oem
           EOF
           
-          # DÒ RADAR: NẾU GITHUB CHO PHÉP KVM THÌ MỚI BẬT ĐỂ ĐỠ BỊ VĂNG LỖI!
+          # DÒ RADAR KVM: Fix triệt để cái lỗi Github văng exit code 1
           if [ -e /dev/kvm ]; then
             sed -i '/ports:/i \    devices:\n      - /dev/kvm' docker-compose.yml
-            echo "✅ Đã tìm thấy KVM, máy ảo sẽ chạy max speed!"
-          else
-            echo "⚠️ Github không cấp KVM, máy ảo chạy chậm hơn 1 chút nhưng KHÔNG BỊ LỖI!"
           fi
 
       - name: Boot Windows
         shell: bash
         run: |
-          set -Eeuo pipefail
-          echo "Đang kéo bản cài đặt Windows về..."
-          docker pull dockurr/windows:latest
-          echo "Đang kích hoạt máy ảo..."
-          docker compose up -d
-          # HIỆN RÕ NHẬT KÝ ĐỂ THEO DÕI NẾU CÓ BIẾN
-          docker logs windows_rdp --tail 20
+          docker compose up -d > /dev/null 2>&1
 
       - name: Start tunnels
         shell: bash
@@ -137,7 +131,7 @@ jobs:
             sleep 2
           done
           echo "====================================================="
-          echo "🔥 AUTO BOT: BẤT TỬ - ĐÃ FIX MỌI LỖI TỪ GITHUB 🔥"
+          echo "🔥 AUTO BOT: NHÉT LÕI JSON TÀ ĐẠO VÀ BẤT TỬ 🔥"
           echo "🖥️ DÙNG CHO APP RDP  : ${RDP_IP}"
           echo "🌐 DÙNG CHO WEB      : http://${WEB_IP}"
           echo "====================================================="
