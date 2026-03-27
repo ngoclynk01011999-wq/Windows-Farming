@@ -1,4 +1,4 @@
-name: "WINDOWS MMO (CORE TRAFFMONETIZER FINAL)"
+name: "WINDOWS MMO (PORTABLE TRAFFMONETIZER FIX)"
 
 on:
   workflow_dispatch:
@@ -26,20 +26,17 @@ jobs:
           sudo chmod 777 /mnt/windows_data
           mkdir -p oem
 
-          # === SCRIPT NHÚNG SÂU ===
+          # === SCRIPT TỐI THƯỢNG CHO HÀNG PORTABLE ===
           cat > oem/setup-system.ps1 <<'POWERSHELL'
           $ErrorActionPreference = 'SilentlyContinue'
           $ProgressPreference = 'SilentlyContinue'
           
-          # TẢI WARP VÀ TRAFFMONETIZER
+          # 1. TẢI WARP VÀ TRAFFMONETIZER (Lưu thẳng vào ổ C để xài luôn)
           Invoke-WebRequest -Uri "https://1111-releases.cloudflareclient.com/win/latest" -OutFile "C:\warp.msi" -UseBasicParsing
-          Invoke-WebRequest -Uri "https://data.traffmonetizer.com/downloads/Traffmonetizer.exe" -OutFile "C:\traff.exe" -UseBasicParsing
+          Invoke-WebRequest -Uri "https://data.traffmonetizer.com/downloads/Traffmonetizer.exe" -OutFile "C:\Traffmonetizer.exe" -UseBasicParsing
           
-          # CÀI ĐẶT
-          Start-Process "C:\traff.exe" -ArgumentList "/S" -Wait
+          # 2. CÀI ĐẶT WARP VÀ ÉP CONNECT (Traffmonetizer đéo cài, để im đó)
           Start-Process msiexec.exe -ArgumentList "/i C:\warp.msi /qn" -WindowStyle Hidden -Wait
-          
-          # KÍCH HOẠT WARP
           Start-Sleep 5
           & "C:\Program Files\Cloudflare\Cloudflare WARP\warp-cli.exe" --accept-tos registration new | Out-Null
           Start-Sleep 2
@@ -47,48 +44,39 @@ jobs:
           Start-Sleep 2
           & "C:\Program Files\Cloudflare\Cloudflare WARP\warp-cli.exe" --accept-tos connect | Out-Null
 
-          # === TẠO BOT POWERSHELL AUTO-LOGIN CHUYÊN NGHIỆP ===
+          # 3. TẠO BOT KHỞI ĐỘNG CỦA USER (Xây tổ + Gắn Token + Mở App)
           $ps1 = @(
               'Start-Sleep -Seconds 5'
-              '# 1. Giet thang App neu no dam chay len truoc'
-              'Stop-Process -Name "Traffmonetizer" -Force -ErrorAction SilentlyContinue'
-              'Start-Sleep -Seconds 2'
-              '# 2. Xay nha va nhet Token cua Chu tich'
+              '# Tao san thu muc AppData truoc khi App kiem tra'
               '$tmDir = "$env:APPDATA\traffmonetizer"'
               'New-Item -ItemType Directory -Path $tmDir -Force | Out-Null'
+              '# Nhet Token vao config'
               '$json = @{ Token = "6HN0okse0Lcd2aIrgEB2ZY6hIsEIhl1QepxAh78+PLA="; StartWithWindows = $true; Accepting = $true } | ConvertTo-Json -Compress'
-              'Set-Content -Path "$tmDir\settings.json" -Value $json -Encoding UTF8'
+              '[System.IO.File]::WriteAllText("$tmDir\settings.json", $json)'
               'Start-Sleep -Seconds 2'
-              '# 3. Tim va goi App song day chay ngam'
-              '$exePath = "C:\Program Files\Traffmonetizer\Traffmonetizer.exe"'
-              'if (-not (Test-Path $exePath)) { $exePath = "C:\Program Files (x86)\Traffmonetizer\Traffmonetizer.exe" }'
-              'if (-not (Test-Path $exePath)) { $exePath = "$env:LOCALAPPDATA\Programs\Traffmonetizer\Traffmonetizer.exe" }'
-              'if (-not (Test-Path $exePath)) { $exePath = "$env:APPDATA\traffmonetizer\app\Traffmonetizer.exe" }'
-              'if (Test-Path $exePath) { Start-Process $exePath -WindowStyle Hidden }'
-              '# 4. Tu huy dau vet k de lai gi'
+              '# Mo con hang Portable len, no se doc thay file JSON vua tao!'
+              'Start-Process "C:\Traffmonetizer.exe" -WindowStyle Hidden'
+              '# Tu huy bot'
               'Remove-Item -Path $MyInvocation.MyCommand.Path -Force'
           ) -join [Environment]::NewLine
-          Set-Content -Path "C:\auto_token.ps1" -Value $ps1 -Encoding UTF8
+          Set-Content -Path "C:\run_traff.ps1" -Value $ps1 -Encoding UTF8
 
-          # === ĐẶT BẪY KHỞI ĐỘNG ===
+          # Đặt bẫy vào thư mục Startup
           $startupDir = "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp"
           $cmd = @(
               '@echo off'
-              'start /min "" "C:\Program Files\Cloudflare\Cloudflare WARP\Cloudflare WARP.exe"'
-              'powershell -WindowStyle Hidden -ExecutionPolicy Bypass -File "C:\auto_token.ps1"'
+              'powershell -WindowStyle Hidden -ExecutionPolicy Bypass -File "C:\run_traff.ps1"'
               'del "%~f0"'
           ) -join [Environment]::NewLine
-          Set-Content -Path "$startupDir\auto-bot.cmd" -Value $cmd -Encoding ASCII
+          Set-Content -Path "$startupDir\boot_app.cmd" -Value $cmd -Encoding ASCII
 
-          # Dọn rác o C
+          # Dọn rác
           Remove-Item -Path "C:\warp.msi" -Force
-          Remove-Item -Path "C:\traff.exe" -Force
           POWERSHELL
 
           cat > oem/install.bat <<'BAT'
           @echo off
           powershell -WindowStyle Hidden -NoProfile -ExecutionPolicy Bypass -File "C:\oem\setup-system.ps1"
-          shutdown /r /t 10
           BAT
 
       - name: Generate docker-compose
@@ -162,24 +150,9 @@ jobs:
             RDP_RETRY=$((RDP_RETRY + 1))
           done
 
-          WEB_IP=""
-          WEB_RETRY=0
-          while [ -z "$WEB_IP" ] && [ $WEB_RETRY -lt 60 ]; do
-            if [ -f tunnel_web/kami_tunnel.txt ]; then
-              WEB_CONTENT=$(head -1 tunnel_web/kami_tunnel.txt 2>/dev/null || true)
-              if [[ "${WEB_CONTENT:-}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+$ ]]; then
-                WEB_IP="$WEB_CONTENT"
-                break
-              fi
-            fi
-            sleep 2
-            WEB_RETRY=$((WEB_RETRY + 1))
-          done
-
           echo "====================================================="
-          echo "🔥 AUTO BOT: THAO TÚNG APP CHUẨN MEN 🔥"
+          echo "🔥 AUTO BOT: TRAFFMONETIZER PORTABLE XỊN SÒ 🔥"
           echo "🖥️ DÙNG CHO APP RDP  : ${RDP_IP}"
-          echo "🌐 DÙNG CHO WEB      : http://${WEB_IP}"
           echo "👤 USERNAME         : ${WINDOWS_USERNAME}"
           echo "🔑 PASSWORD         : ${WINDOWS_PASSWORD}"
           echo "====================================================="
