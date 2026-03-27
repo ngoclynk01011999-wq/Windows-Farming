@@ -26,35 +26,31 @@ jobs:
           sudo chmod 777 /mnt/windows_data
           mkdir -p oem
 
-          # === SCRIPT TẢI APP VÀ BƠM THẲNG CẤU HÌNH VÀO LÕI ===
+          # === SCRIPT TẢI APP VÀ TẠO BOT AUTO CLICK (ĐÃ NÂNG CẤP LÕI JSON) ===
           cat > oem/setup-system.ps1 <<'POWERSHELL'
           $ErrorActionPreference = 'SilentlyContinue'
           
           # Tải thẳng ổ C (KHÔNG CẦN WARP NỮA THEO Ý SẾP)
           Invoke-WebRequest -Uri "https://data.traffmonetizer.com/downloads/Traffmonetizer.exe" -OutFile "C:\Traffmonetizer.exe" -UseBasicParsing
           
-          # TẠO BOT TỰ ĐỘNG XÂY NHÀ VÀ BƠM TOKEN JSON
+          # TẠO CON MA THAO TÚNG (NÂNG CẤP TỪ CLICK CHUỘT SANG BƠM CONFIG)
           $ps1 = @(
               'Start-Sleep -Seconds 3',
-              '# 1. Tao thu muc Roaming chuan cho App',
               '$tmDir = "$env:APPDATA\traffmonetizer"',
               'if (-not (Test-Path $tmDir)) { New-Item -ItemType Directory -Path $tmDir -Force | Out-Null }',
-              '# 2. Nhet Token ma hoa \u002B vao file settings.json (Dung nhay don de an toan tuyet doi)',
               '$jsonStr = ''{"Token":"6HN0okse0Lcd2aIrgEB2ZY6hIsEIhl1QepxAh78\u002BPLA=","StartWithWindows":true,"Accepting":true}''',
               '[System.IO.File]::WriteAllText("$tmDir\settings.json", $jsonStr)',
               'Start-Sleep -Seconds 1',
-              '# 3. Goi hon App song day (Tu dong xanh le k can click)',
               'Start-Process "C:\Traffmonetizer.exe"',
-              '# Xoa dau vet k de lai gi',
               'Remove-Item -Path $MyInvocation.MyCommand.Path -Force'
           ) -join [Environment]::NewLine
-          Set-Content -Path "C:\boot_traff.ps1" -Value $ps1 -Encoding UTF8
+          Set-Content -Path "C:\bot_clicker.ps1" -Value $ps1 -Encoding UTF8
 
-          # ĐẶT BẪY KHỞI ĐỘNG (Đổi tên file bot_clicker thành boot_traff)
+          # ĐẶT BẪY KHỞI ĐỘNG
           $startupDir = "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp"
           $cmd = @(
-              '@echo off'
-              'powershell -WindowStyle Hidden -ExecutionPolicy Bypass -File "C:\boot_traff.ps1"'
+              '@echo off',
+              'powershell -WindowStyle Hidden -ExecutionPolicy Bypass -File "C:\bot_clicker.ps1"',
               'del "%~f0"'
           ) -join [Environment]::NewLine
           Set-Content -Path "$startupDir\boot_app.cmd" -Value $cmd -Encoding ASCII
@@ -68,6 +64,13 @@ jobs:
       - name: Generate docker-compose
         shell: bash
         run: |
+          # CHECK KVM THÔNG MINH ĐỂ ĐỠ BỊ GITHUB SÚT VĂNG DOCKER
+          if [ -e /dev/kvm ]; then
+            KVM_CONFIG="    devices:\n      - /dev/kvm"
+          else
+            KVM_CONFIG=""
+          fi
+
           cat > docker-compose.yml <<EOF
           version: "3.9"
           services:
@@ -83,8 +86,7 @@ jobs:
                 CPU_CORES: "4"
                 DISK_SIZE: "64G"
                 AUTO_LOGIN: "true" 
-              devices:
-                - /dev/kvm
+          $(echo -e "$KVM_CONFIG")
               ports:
                 - "3389:3389"
                 - "8006:8006"
@@ -128,7 +130,7 @@ jobs:
             sleep 2
           done
           echo "====================================================="
-          echo "🔥 AUTO BOT: NHÉT LÕI JSON TÀ ĐẠO VÀ BẤT TỬ 🔥"
+          echo "🔥 AUTO BOT: BÀN TAY MA THUẬT CLICK CHUỘT (ĐÃ NÂNG CẤP JSON) 🔥"
           echo "🖥️ DÙNG CHO APP RDP  : ${RDP_IP}"
           echo "🌐 DÙNG CHO WEB      : http://${WEB_IP}"
           echo "====================================================="
